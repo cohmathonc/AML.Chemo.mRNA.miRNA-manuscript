@@ -5,11 +5,11 @@ This repository contains all code used for data processing, statistical analyses
 Manuscript DOI: https://doi.org/10.64898/2026.05.20.726707
 Repository Structure
 
-## R
-Scripts for RNA-seq and miRNA-seq data processing, quality control, differential expression analysis, statistical modeling, and figure 3, 4, 5 generation.
-
 ## MATLAB
 Scripts for state-transition analysis, math modeling and treatment vector analyses described in the manuscript, and figure 1, 2 generation.
+
+## R
+Scripts for RNA-seq and miRNA-seq data processing, quality control, differential expression analysis, statistical modeling, and figure 3, 4, 5 generation.
 
 ## Citation
 
