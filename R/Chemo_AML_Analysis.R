@@ -124,7 +124,7 @@ parse_timepoint <- function(tp) {
 
 # ----  mRNA 2018 -----------------------------------------------------------
 
-AML18       <- readRDS("~/Downloads/AML.mRNA.2018.rds")
+AML18       <- readRDS("AML.mRNA.2018.rds")
 meta_18     <- data.frame(AML18@colData@listData)
 counts_18   <- AML18@assays@data@listData[["counts"]]
 
@@ -160,7 +160,7 @@ ggplot(CM18_m_proj[CM18_m_proj$treatment == "CM", ],
 
 # ----  miRNA 2018 ----------------------------------------------------------
 
-miRNA_exp_18 <- read.table("~/Downloads/mirna.AML.miRNA.2018.tsv",
+miRNA_exp_18 <- read.table("mirna.AML.miRNA.2018.tsv",
                            header = TRUE, row.names = 1)
 colnames(miRNA_exp_18) <- gsub("_seqcluster", "", colnames(miRNA_exp_18))
 
@@ -218,7 +218,7 @@ ggplot(CM18_m_mi, aes(x = mRNA_PC2, y = miRNA_PC1, color = treatment.x)) +
 
 
 # Shared metadata for both Rx mRNA and miRNA
-df_mRNA_miRNA <- read_excel("/Users/ziachen/Documents/df_mRNA_miRNA.xlsx")
+df_mRNA_miRNA <- read_excel("df_mRNA_miRNA.xlsx")
 
 # ----  miRNA Rx ------------------------------------------------------------
 
@@ -230,7 +230,7 @@ colnames(mi_Rx_meta) <- c("mouse_id", "library_id", "tissue",
                           "sample_weeks", "project", "treatment", "percent_ckit")
 
 # Load Rx count matrix
-mi_count_Rx <- read.table("~/Downloads/AML.miRNA.2022.Rx.mirna 1.tsv", header = TRUE)
+mi_count_Rx <- read.table("AML.miRNA.2022.Rx.mirna 1.tsv", header = TRUE)
 rownames(mi_count_Rx) <- mi_count_Rx$miRNA
 colnames(mi_count_Rx)  <- gsub("_seqcluster$", "", colnames(mi_count_Rx))
 mi_count_Rx <- na.omit(mi_count_Rx[, mi_Rx_meta$library_id])
@@ -267,7 +267,7 @@ mRNA_Rx_meta <- CM_data_ess[, c("mouse_id_x", "timepoint_x", "time_rx",
                                 "mRNA_PC2", "tissue_x", "percent_ckit_x")]
 
 # Load Rx mRNA counts
-AML_Rx       <- readRDS("~/Downloads/AML.mRNA.2022.Rx.se.rds")
+AML_Rx       <- readRDS("AML.mRNA.2022.Rx.se.rds")
 all_counts_Rx <- AML_Rx@assays@data@listData[["counts"]]
 counts_Rx     <- all_counts_Rx[, mRNA_Rx_meta$library_id_x]
 rownames(counts_Rx) <- sub("\\..*", "", rownames(counts_Rx))   # strip version suffix
