@@ -21,7 +21,7 @@ params.miRNA.xmin = -29.15299;
 params.miRNA.xmax = 2.139824;
 
 %% ====== Load the data ======
-% Data is imported from the data file "m_miRNA_combined_all_2.csv" created from the analysis of the mRNA-seq and miRNA-seq data.
+% Data is imported from the data file "m_miRNA_combined_all.csv" created from the analysis of the mRNA-seq and miRNA-seq data.
 % See the "Chemo_AML_Analysis.R" file in the R folder.
 data = load_mouse_data(params);
 
