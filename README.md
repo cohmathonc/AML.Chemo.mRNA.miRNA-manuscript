@@ -17,5 +17,6 @@ If you use this code or build upon this work, please cite:
 Multiomic State Transitions Reveal Post-Treatment Transcriptome Desynchronization in Acute Myeloid Leukemia (DOI: https://doi.org/10.64898/2026.05.20.726707)
 
 ## Contact
-
+- Jennifer Rangel Ambriz @jrangelambriz
+- Ziang Chen @ziangC11
 
