@@ -1476,13 +1476,486 @@ ggplot(color_percentages, aes(x = chromosome_name, y = count, fill = colors)) +
 
 
 
+# supplementary analysis
+# Figure S miRNA cluster expression
+{
+
+  
+  
+# Rx meta
+  mi_data_ess <- df_mRNA_miRNA[grepl(mouse_list, df_mRNA_miRNA$mouse_id_y),]
+  mi_Rx_ess <- mi_data_ess[, c("mouse_id_y",'library_id_y',"tissue_y", "time_rx","cohort_x",'treatment_y',"percent_ckit_x")]
+  colnames(mi_Rx_ess) <- c("mouse_id","library_id","tissue","sample_weeks","project","treatment","percent_ckit")
+  
+  
+  # Rx expression matrix
+  rownames(mi_count) <- mi_count$miRNA
+  names(mi_count) <- gsub("_seqcluster$", "", names(mi_count))
+  mi_Rx_count <- mi_count[,mi_Rx_ess$library_id]
+  
+  # cpm
+  mi_Rx_count <- na.omit(mi_Rx_count)
+  mi_Rx_cpm <- cpm(mi_Rx_count, log = T)
+  inner_miRNA <- intersect(rownames(mi_Rx_cpm),rownames(mi_bV))
+  
+  
+  
+  
+  # expression per group
+  modules_of_interest = "blue"
+  submod = miR_module_df[miR_module_df$colors == modules_of_interest,]
+  
+  inter_miR <- intersect(rownames(mi_Rx_cpm),submod$gene_id)
+  exp_group <- mi_Rx_cpm[inter_miR,]
+  
+  
+  miRNA_exp_group <- t(exp_group)   # cpm dynamic
+  miRNA_exp_group <- as.data.frame(miRNA_exp_group)
+  miRNA_exp_group$library_id <- rownames(miRNA_exp_group)
+  miRNA_exp_group_table <- merge(miRNA_exp_group,mi_data_treat_ctrl, by.x = 'library_id',by.y = "library_id")
+  
+  df_long <- pivot_longer(miRNA_exp_group_table, cols = inter_miR, names_to = "variable", values_to = "value")
+  df_long$time <- round(df_long$timepoint_sorter)
+  
+  B <- df_long %>%
+    group_by(time, variable) %>%      # group by column1 and column2
+    summarise(
+      mean_col3 = mean(value),        # calculate mean of column3
+      .groups = "drop"
+    )
+  
+  avg_line <- B %>%
+    group_by(time) %>%
+    summarise(mean_col3 = mean(mean_col3), .groups = "drop") %>%
+    mutate(variable = "average")
+  
+  B_others <- B
+  B_avg <- avg_line
+  
+  
+  ggplot() +
+    geom_line(data = B_others, aes(x = time, y = mean_col3, group = variable), color = "grey", size = 1) +
+    geom_point(data = B_others, aes(x = time, y = mean_col3, group = variable), color = "grey", size = 2) +
+    geom_line(data = B_avg, aes(x = time, y = mean_col3), color = modules_of_interest, size = 1.5) +
+    geom_point(data = B_avg, aes(x = time, y = mean_col3), color = modules_of_interest, size = 2) +
+    scale_x_continuous(limits = c(-3, 10),
+                       breaks = seq(-3, 10, by = 1))+
+    scale_y_continuous(limits = c(0, 10)) +
+    theme(
+      panel.grid.major = element_blank(),  
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", color = "white"),
+      panel.border = element_rect(fill="transparent"), 
+      axis.title.x = element_text(size = 25),
+      axis.title.y = element_text(size = 25), 
+      axis.text.x = element_text(size = 25),
+      axis.text.y = element_text(size = 25),
+      
+      # Increase legend text size (if you have a legend)
+      legend.text = element_text(size = 20),
+      legend.title = element_text(size = 20)
+    ) +
+    labs(y = "CPM miRNA")
+  
+  
+}
 
 
 
 
 
-
-
+# Figure S DEG
+{
+  # find groups
+  {
+    # Rx meta
+    CM_data_ess <- df_mRNA_miRNA[grepl(mouse_list, df_mRNA_miRNA$mouse_id_x),]
+    data_ess <- CM_data_ess[, c("mouse_id_x", "timepoint_x",'time_rx','timepoint_y','treatment_y','library_id_x',"mRNA_PC2",
+                                "tissue_x","percent_ckit_x")]
+    
+    # Rx expression
+    all_counts <- CM18_mice@assays@data@listData[["counts"]]
+    counts_Rx <- all_counts
+    rownames(counts_Rx) <- sub("\\..*", "", rownames(counts_Rx))
+    
+    data_ess <- data_ess[,c("library_id_x","mouse_id_x","time_rx","mRNA_PC2")]
+    colnames(data_ess) <- c("library_id","mouse_id","sample_weeks","mRNA_PC2")
+    
+    # pre-c2
+    pre_c2 <- data_ess[data_ess$sample_weeks == -3,]
+    pre_c2 <- na.omit(pre_c2)
+    pre_c2$state <- 'pre_c2'
+    
+    # pre-Rx
+    pre_w0 <- data_ess[data_ess$sample_weeks == 0,]
+    pre_w0 <- na.omit(pre_w0)
+    pre_w0$state <- 'pre_w0'
+    
+    # W2
+    Rx_w2 <- data_ess[data_ess$sample_weeks == 2,]
+    Rx_w2 <- na.omit(Rx_w2)
+    Rx_w2$state <- 'Rx_w2'
+    
+    # Rx response max
+    data_ess_pj <- data_ess[data_ess$sample_weeks >= 0,]
+    
+    Rx_max <- data_ess_pj %>%
+      group_by(mouse_id) %>%
+      slice_max(order_by = mRNA_PC2, n = 1, with_ties = FALSE) %>%
+      ungroup()
+    Rx_max <- na.omit(Rx_max)
+    Rx_max$state <- 'Rx_max'
+    
+    # Relapse minimum.
+    result_after_max <- data_ess[data_ess$sample_weeks >= 5,]
+    
+    Rx_min <- result_after_max %>%
+      group_by(mouse_id) %>%
+      slice_min(order_by = mRNA_PC2, n = 1, with_ties = FALSE) %>%
+      ungroup()
+    Rx_min <- na.omit(Rx_min)
+    Rx_min$state <- 'Rx_min'
+    
+    # control group
+    all_meta <- get_pin("metadata_mmu.csv")
+    Rx_ctrl <- all_meta[all_meta$mouse_id %in% c("4311","4534","4501"),]
+    Rx_ctrl <- Rx_ctrl[Rx_ctrl$assay == 'mRNA',]
+    Rx_ctrl <- Rx_ctrl[Rx_ctrl$tissue != 'BM',]
+    Rx_ctrl <- Rx_ctrl[,c("library_id","mouse_id",'sample_weeks')]
+    Rx_ctrl$state <- 'Ctrl'
+    Rx_ctrl <- Rx_ctrl[!duplicated(Rx_ctrl), ]
+    
+  }
+  
+  df_2A <-merge(Rx_m_proj,rbind(pre_w0[,c("library_id","state")],
+                                Rx_max[,c("library_id","state")],
+                                Rx_min[,c("library_id","state")]), by = "library_id",all.x = T)
+  
+  
+  
+  
+  ggplot(df_2A, aes(x = sample_weeks, y = mRNA_PC2, group = mouse_id, color = state)) +
+    geom_line(size = 1, color = "grey") +
+    geom_point(size = 6) + 
+    scale_x_continuous(limits = c(-3, 10), breaks = seq(-3, 10, by = 1))+
+    scale_y_continuous(limits = c(-250, 50)) +
+    theme(
+      panel.grid.major = element_blank(),  
+      panel.grid.minor = element_blank(),
+      panel.background = element_rect(fill = "white", color = "white"),
+      panel.border = element_rect(fill="transparent"), 
+      axis.title.x = element_text(size = 25),
+      axis.title.y = element_blank(),
+      axis.text.x = element_text(size = 25),
+      
+      # Increase legend text size (if you have a legend)
+      legend.text = element_text(size = 20),
+      legend.title = element_text(size = 20)
+    )  +
+    labs(title = "", x = "Weeks", y = "")
+  
+  #DEG for max_VS_pre
+  {
+    #r <- Rx_min[,c("library_id","mouse_id",'timepoint','cohort','sample_weeks','state')]
+    all <- rbind(pre_w0[,c("library_id","mouse_id",'sample_weeks','state')],
+                 Rx_max[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('pre_w0','Rx_max'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    Rx_max_VS_pre_w0 <- result
+    Rx_max_VS_pre_w0$group <- "Rx_max_VS_pre_w0"
+    
+  }
+  
+  #DEG for relapse_VS_max
+  {
+    #r <- Rx_min[,c("library_id","mouse_id",'timepoint','cohort','sample_weeks','state')]
+    all <- rbind(Rx_min[,c("library_id","mouse_id",'sample_weeks','state')],
+                 Rx_max[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('Rx_max','Rx_min'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    Rx_max_VS_Rx_min <- result
+    Rx_max_VS_Rx_min$group <- "Rx_max_VS_Rx_min"
+    
+  }
+  
+  #DEG for relapse_VS_pre
+  {
+    #r <- Rx_min[,c("library_id","mouse_id",'timepoint','cohort','sample_weeks','state')]
+    all <- rbind(Rx_min[,c("library_id","mouse_id",'sample_weeks','state')],
+                 pre_w0[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('pre_w0','Rx_min'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    Rx_min_VS_pre_w0 <- result
+    Rx_min_VS_pre_w0$group <- "Rx_min_VS_pre_w0"
+    
+  }
+  
+  list_of_sets <- list(
+    Rx_Relapse_VS_Pre_Rx = rownames(Rx_min_VS_pre_w0[Rx_min_VS_pre_w0$Group != 'normal',]),
+    Rx_Recovery_VS_Rx_Relapse = rownames(Rx_max_VS_Rx_min[Rx_max_VS_Rx_min$Group != 'normal',]),
+    Rx_Recovery_VS_Pre_Rx = rownames(Rx_max_VS_pre_w0[Rx_max_VS_pre_w0$Group != 'normal',])
+  )
+  
+  upset(
+    fromList(list_of_sets), 
+    order.by = "freq", 
+    main.bar.color = "skyblue", 
+    sets.bar.color = "orange", 
+    set_size.show = TRUE,
+    text.scale = 2
+  )
+  
+  # pre_w0 vs Ctrl
+  {
+    all <- rbind(pre_w0[,c("library_id","mouse_id",'sample_weeks','state')],
+                 Rx_ctrl[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('Ctrl','pre_w0'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    pre_w0_VS_control <- result
+    pre_w0_VS_control$group <- "pre_w0"
+  }
+  
+  # Rx_max vs Ctrl
+  {
+    all <- rbind(Rx_max[,c("library_id","mouse_id",'sample_weeks','state')],
+                 Rx_ctrl[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('Ctrl','Rx_max'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    Rx_max_VS_control <- result
+    Rx_max_VS_control$group <- "Rx_recovery"
+  } 
+  
+  # Rx_min vs Ctrl
+  {
+    all <- rbind(Rx_min[,c("library_id","mouse_id",'sample_weeks','state')],
+                 Rx_ctrl[,c("library_id","mouse_id",'sample_weeks','state')])
+    
+    reordered_mat <- counts_Rx[, all$library_id]
+    #get the meta set for two compare groups
+    coldata <- all[,c("library_id","state")]
+    rownames(coldata) <- coldata$library_id
+    reordered_mat <- reordered_mat[, rownames(coldata)]
+    reordered_mat <- round(reordered_mat)
+    coldata$state <- factor(coldata$state,levels = c('Ctrl','Rx_min'))
+    
+    dds <- DESeqDataSetFromMatrix(countData=reordered_mat,
+                                  colData=coldata,
+                                  design=~state)
+    
+    dds <- DESeq(dds)
+    
+    # get DEG resultd
+    res <- results(dds)
+    
+    result <- data.frame(res)
+    
+    # mark up and down gene
+    result$Group = "normal"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange > 1) )] = "up"
+    result$Group[which( (result$padj < 0.05) & (result$log2FoldChange < -1) )] = "down"
+    #result$padj_log <- -log10(result$padj)
+    Rx_min_VS_control <- result
+    Rx_min_VS_control$group <- "Rx_relapse"
+  }
+  
+  list_of_c <- list(
+    pre_Rx_VS_Ctrl = rownames(pre_w0_VS_control[pre_w0_VS_control$Group != 'normal',]),
+    Rx_Recovery_VS_Ctrl = rownames(Rx_max_VS_control[Rx_max_VS_control$Group != 'normal',]),
+    Rx_Relapse_VS_Ctrl = rownames(Rx_min_VS_control[Rx_min_VS_control$Group != 'normal',])
+  )
+  
+  upset(
+    fromList(list_of_c), 
+    order.by = "freq", 
+    main.bar.color = "skyblue", 
+    sets.bar.color = "orange", 
+    set_size.show = TRUE,
+    text.scale = 2
+  )
+  
+  # GSEA Rx_Recovery_VS_Ctrl
+  { 
+  Rx_Recovery_VS_Ctrl = rownames(Rx_max_VS_control[Rx_max_VS_control$Group != 'normal',])
+  mart <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+  genes <- getBM(attributes = c('ensembl_gene_id', 'mgi_symbol', 'entrezgene_id'),
+                 filters = 'ensembl_gene_id',
+                 values = Rx_Recovery_VS_Ctrl,
+                 mart = mart)
+  
+  msig_mouse <- msigdbr(species = "Mus musculus")
+  
+  # For example, get the "H" hallmark gene sets
+  hallmark <- msig_mouse %>% filter(gs_collection == "H")
+  
+  gene_list <- genes$entrezgene_id
+  
+  # Perform enrichment analysis using msigdbr gene sets (example with Hallmark gene sets)
+  enrich_res <- enricher(gene_list, TERM2GENE = hallmark[, c("gs_name", "ncbi_gene")])
+  enrich_res_df <- as.data.frame(enrich_res@result)
+  
+  sig_terms <- enrich_res_df %>%
+    filter(p.adjust < 0.05) %>%
+    arrange(p.adjust)
+  
+  # Create a bar plot of top enriched terms
+  dotplot(enrich_res, showCategory = 15)  +
+    theme(
+      axis.text.y = element_text(size = 18))
+  }
+  
+  # GSEA Rx_Relapse_VS_Pre_Rx
+  { 
+    Rx_Relapse_VS_Pre_Rx = rownames(Rx_min_VS_pre_w0[Rx_min_VS_pre_w0$Group != 'normal',])
+    mart <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+    genes <- getBM(attributes = c('ensembl_gene_id', 'mgi_symbol', 'entrezgene_id'),
+                   filters = 'ensembl_gene_id',
+                   values = Rx_Relapse_VS_Pre_Rx,
+                   mart = mart)
+    
+    msig_mouse <- msigdbr(species = "Mus musculus")
+    
+    # For example, get the "H" hallmark gene sets
+    hallmark <- msig_mouse %>% filter(gs_collection == "H")
+    
+    gene_list <- genes$entrezgene_id
+    
+    # Perform enrichment analysis using msigdbr gene sets (example with Hallmark gene sets)
+    enrich_res <- enricher(gene_list, TERM2GENE = hallmark[, c("gs_name", "ncbi_gene")])
+    enrich_res_df <- as.data.frame(enrich_res@result)
+    
+    sig_terms <- enrich_res_df %>%
+      filter(p.adjust < 0.05) %>%
+      arrange(p.adjust)
+    
+    # Create a bar plot of top enriched terms
+    dotplot(enrich_res, showCategory = 15)  +
+      theme(
+        axis.text.y = element_text(size = 18))
+  }
+  
+  combined_DEG <- rbind(Rx_min_VS_pre_w0[Rx_min_VS_pre_w0$Group != 'normal',],
+                        Rx_max_VS_Rx_min[Rx_max_VS_Rx_min$Group != 'normal',],
+                        Rx_max_VS_pre_w0[Rx_max_VS_pre_w0$Group != 'normal',],
+                        pre_w0_VS_control[pre_w0_VS_control$Group != 'normal',],
+                        Rx_max_VS_control[Rx_max_VS_control$Group != 'normal',],
+                        Rx_min_VS_control[Rx_min_VS_control$Group != 'normal',]
+                       )
+}
 
 
 
